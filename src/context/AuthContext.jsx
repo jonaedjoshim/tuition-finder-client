@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from "react";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -7,27 +7,29 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   updateProfile,
-} from 'firebase/auth';
-import { auth } from '../firebase/config';
-import { authAPI } from '../api';
+} from "firebase/auth";
+import { auth } from "../firebase/config";
+import { authAPI } from "../api";
 
 const AuthContext = createContext(null);
 
 // A Firebase sign-in triggers onAuthStateChanged *before* the calling page has
 // finished its own backend call. Without this guard the listener and the page
 // race to create the Mongo user, and a tutor can end up stored as a student.
-// `authFlowRef` is a counter because flows can overlap.
+// `authFlowRef`is a counter because flows can overlap.
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null); // backend user object (role, phone etc)
   const [firebaseUser, setFirebaseUser] = useState(null); // raw firebase user object
   const [loading, setLoading] = useState(true);
   const authFlowRef = useRef(0);
 
-  const bootstrap = async (fbUser, role = 'student') => {
+  const bootstrap = async (fbUser, role = "student") => {
     const idToken = await fbUser.getIdToken();
     const res = await authAPI.bootstrap({
       idToken,
-      name: fbUser.displayName || (fbUser.email ? fbUser.email.split('@')[0] : 'TuitionFinder User'),
+      name:
+        fbUser.displayName ||
+        (fbUser.email ? fbUser.email.split("@")[0] : "TuitionFinder User"),
       role,
     });
     const nextUser = res.data.user;
@@ -59,7 +61,7 @@ export function AuthProvider({ children }) {
         // No backend user yet (first Google sign-in, interrupted signup, or a
         // user deleted from Mongo). Recreate it instead of leaving a ghost session.
         try {
-          await bootstrap(fbUser, 'student');
+          await bootstrap(fbUser, "student");
         } catch {
           setUser(null);
         }
@@ -76,7 +78,11 @@ export function AuthProvider({ children }) {
     authFlowRef.current += 1;
     setLoading(true);
     try {
-      const credential = await createUserWithEmailAndPassword(auth, email, password);
+      const credential = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password,
+      );
       await updateProfile(credential.user, { displayName: name });
       setFirebaseUser(credential.user);
 
@@ -98,9 +104,13 @@ export function AuthProvider({ children }) {
     authFlowRef.current += 1;
     setLoading(true);
     try {
-      const credential = await signInWithEmailAndPassword(auth, email, password);
+      const credential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password,
+      );
       setFirebaseUser(credential.user);
-      const nextUser = await bootstrap(credential.user, 'student');
+      const nextUser = await bootstrap(credential.user, "student");
       return nextUser;
     } finally {
       authFlowRef.current -= 1;
@@ -111,7 +121,7 @@ export function AuthProvider({ children }) {
   // Google Login — used for both first-time sign-up and returning users.
   // bootstrap finds the existing Mongo user by firebaseUid, so the role chosen
   // at first sign-up is preserved on later logins.
-  const loginWithGoogle = async (role = 'student') => {
+  const loginWithGoogle = async (role = "student") => {
     authFlowRef.current += 1;
     setLoading(true);
     try {
@@ -135,7 +145,16 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, firebaseUser, loading, register, login, loginWithGoogle, logout, updateUser }}
+      value={{
+        user,
+        firebaseUser,
+        loading,
+        register,
+        login,
+        loginWithGoogle,
+        logout,
+        updateUser,
+      }}
     >
       {children}
     </AuthContext.Provider>

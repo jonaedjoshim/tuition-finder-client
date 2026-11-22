@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { getErrorMessage } from '../utils/helpers';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { getErrorMessage } from "../utils/helpers";
 
 /**
  * Small data-fetching hook shared by pages.

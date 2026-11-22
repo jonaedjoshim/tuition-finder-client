@@ -1,14 +1,14 @@
-import { useEffect, useState } from 'react';
-import { Button } from './Button';
-import { Modal } from './Modal';
+import { useEffect, useState } from "react";
+import { Button } from "./Button";
+import { Modal } from "./Modal";
 
 export function ConfirmDialog({
   open,
   onClose,
-  title = 'Are you sure?',
+  title = "Are you sure?",
   message,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
   danger = false,
   onConfirm,
 }) {
@@ -39,26 +39,21 @@ export function ConfirmDialog({
       size="sm"
       footer={
         <>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onClose}
-            disabled={busy}
-          >
+          <Button variant="outline" size="sm" onClick={onClose} disabled={busy}>
             {cancelLabel}
           </Button>
           <Button
-            variant={danger ? 'danger' : 'primary'}
+            variant={danger ? "danger" : "primary"}
             size="sm"
             onClick={handleConfirm}
             disabled={busy}
           >
-            {busy ? 'Working…' : confirmLabel}
+            {busy ? "Working…" : confirmLabel}
           </Button>
         </>
       }
     >
-      <p className="text-sm text-gray-600 leading-relaxed">{message}</p>
+      <p className="text-sm text-muted leading-relaxed">{message}</p>
     </Modal>
   );
 }

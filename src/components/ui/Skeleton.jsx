@@ -1,8 +1,8 @@
-export function Skeleton({ className = '' }) {
+export function Skeleton({ className = "" }) {
   return (
     <div
       aria-hidden="true"
-      className={`animate-pulse rounded-lg bg-gray-200/70 ${className}`}
+      className={`skeleton rounded-lg bg-line/60 ${className}`}
     />
   );
 }

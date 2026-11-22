@@ -174,7 +174,7 @@ A full manual smoke test after any change:
 - In-memory rate limits are per serverless instance (best-effort), and message
   delivery is 15-second polling rather than WebSockets — both intentional for
   the current Vercel setup.
-- The client bundle is ~540 kB (Firebase dominates); Vite emits a size warning,
+- The client bundle is ~570 kB (Firebase dominates); Vite emits a size warning,
   but builds and deploys normally.
 
 See `GAP_REGISTER.md` for the audit findings, the fix applied to each, and how

@@ -1,23 +1,33 @@
-export function Button({ children, variant = 'primary', size = 'md', className = '', ...props }) {
+export function Button({
+  children,
+  variant = "primary",
+  size = "md",
+  className = "",
+  ...props
+}) {
   const base =
-    'inline-flex items-center justify-center gap-2 font-semibold font-sora rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
+    "inline-flex items-center justify-center gap-2 font-semibold font-inter rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed";
 
   const variants = {
-    primary: 'bg-royal text-white shadow-md hover:bg-royal-dark hover:shadow-lg hover:-translate-y-0.5',
-    secondary: 'bg-royal-light text-royal border border-blue-200 hover:bg-royal hover:text-white',
-    outline: 'bg-transparent border border-gray-200 text-gray-700 hover:border-royal hover:text-royal hover:bg-royal-light',
-    danger: 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-600 hover:text-white',
-    ghost: 'bg-transparent text-gray-500 hover:text-royal',
+    primary: "bg-brand text-surface hover:bg-brand-strong",
+    secondary: "bg-brand-soft text-brand hover:bg-brand/10",
+    outline:
+      "border border-line bg-surface text-ink hover:border-brand hover:text-brand",
+    danger: "bg-danger/10 text-danger hover:bg-danger/20",
+    ghost: "bg-transparent text-muted hover:text-brand",
   };
 
   const sizes = {
-    sm: 'px-4 py-2 text-sm',
-    md: 'px-6 py-3 text-sm',
-    lg: 'px-8 py-4 text-base',
+    sm: "px-3.5 py-2 text-[13px]",
+    md: "px-5 py-2.5 text-sm",
+    lg: "px-6 py-3 text-[15px]",
   };
 
   return (
-    <button className={`${base} ${variants[variant]} ${sizes[size]} ${className}`} {...props}>
+    <button
+      className={`${base} ${variants[variant] || variants.primary} ${sizes[size] || sizes.md} ${className}`}
+      {...props}
+    >
       {children}
     </button>
   );
