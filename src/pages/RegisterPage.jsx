@@ -7,7 +7,7 @@ export default function RegisterPage() {
   const { register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const defaultRole = params.get('role') || 'student';
+  const defaultRole = params.get('role') === 'tutor' ? 'tutor' : 'student';
 
   const [role, setRole] = useState(defaultRole);
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
@@ -35,7 +35,7 @@ export default function RegisterPage() {
 
     try {
       const { confirmPassword, ...payload } = form;
-      const userData = await register({ ...payload, role });
+      await register({ ...payload, role });
       navigate(role === 'tutor' ? '/tutor/dashboard' : '/student/dashboard');
     } catch (err) {
       setError(friendlyFirebaseError(err));
@@ -48,8 +48,8 @@ export default function RegisterPage() {
     setError('');
     setGoogleLoading(true);
     try {
-      const userData = await loginWithGoogle(role);
-      navigate(userData.role === 'tutor' ? '/tutor/dashboard' : '/student/dashboard');
+      const googleUser = await loginWithGoogle(role);
+      navigate(googleUser.role === 'tutor' ? '/tutor/dashboard' : '/student/dashboard');
     } catch (err) {
       setError(friendlyFirebaseError(err));
     } finally {

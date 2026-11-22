@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/common/ProtectedRoute';
 
@@ -11,11 +12,30 @@ import PostTuitionPage from './pages/PostTuitionPage';
 import StudentDashboard from './pages/StudentDashboard';
 import TutorDashboard from './pages/TutorDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import NotFoundPage from './pages/NotFoundPage';
 
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            duration: 3500,
+            style: {
+              background: '#FFFFFF',
+              color: '#1A1F36',
+              border: '1px solid #E5E7EB',
+              borderRadius: '12px',
+              fontFamily: 'Inter, sans-serif',
+              fontSize: '14px',
+              fontWeight: 500,
+              boxShadow: '0 10px 30px rgba(26, 31, 54, 0.12)',
+            },
+            success: { iconTheme: { primary: '#2D5BE3', secondary: '#FFFFFF' } },
+            error: { iconTheme: { primary: '#DC2626', secondary: '#FFFFFF' } },
+          }}
+        />
         <Routes>
           {/* Public */}
           <Route path="/" element={<HomePage />} />
@@ -58,7 +78,7 @@ export default function App() {
           } />
 
           {/* Fallback */}
-          <Route path="*" element={<HomePage />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

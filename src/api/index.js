@@ -36,6 +36,7 @@ api.interceptors.response.use(
 // register here only creates the matching MongoDB user after the Firebase account exists.
 export const authAPI = {
   register: (data) => api.post('/auth/register', data), // { name, phone, role, idToken }
+  bootstrap: (data) => api.post('/auth/bootstrap', data),
   getMe: () => api.get('/auth/me'),
   updateProfile: (data) => api.put('/auth/profile', data),
 };
@@ -44,6 +45,7 @@ export const authAPI = {
 export const tutorAPI = {
   getAll: (params) => api.get('/tutors', { params }),
   getById: (id) => api.get(`/tutors/${id}`),
+  getMyProfile: () => api.get('/tutors/me/profile'),
   updateProfile: (data) => api.put('/tutors/profile', data),
   uploadDocuments: (formData) =>
     api.post('/tutors/documents', formData, {
@@ -64,12 +66,14 @@ export const postAPI = {
   apply: (postId, data) => api.post(`/posts/${postId}/apply`, data),
   getApplicationsForPost: (postId, params) =>
     api.get(`/posts/${postId}/applications`, { params }),
+  close: (id) => api.put(`/posts/${id}/close`),
 };
 
 // ===== APPLICATIONS =====
 export const applicationAPI = {
   updateStatus: (id, status) => api.put(`/applications/${id}`, { status }),
   getMyReceived: (params) => api.get('/applications/mine', { params }),
+  withdraw: (id) => api.put(`/applications/${id}/withdraw`),
 };
 
 // ===== REVIEWS =====
@@ -85,6 +89,19 @@ export const messageAPI = {
   send: (data) => api.post('/messages', data),
 };
 
+// ===== REPORTS =====
+export const reportAPI = {
+  create: (data) => api.post('/reports', data),
+  getMine: (params) => api.get('/reports/mine', { params }),
+};
+
+// ===== NOTIFICATIONS =====
+export const notificationAPI = {
+  get: (params) => api.get('/notifications', { params }),
+  markRead: (id) => api.put(`/notifications/${id}/read`),
+  markAllRead: () => api.put('/notifications/read-all'),
+};
+
 // ===== ADMIN =====
 export const adminAPI = {
   getStats: () => api.get('/admin/stats'),
@@ -93,10 +110,11 @@ export const adminAPI = {
   deleteUser: (id) => api.delete(`/admin/users/${id}`),
   getPosts: (params) => api.get('/admin/posts', { params }),
   approvePost: (id) => api.put(`/admin/posts/${id}/approve`),
-  rejectPost: (id) => api.put(`/admin/posts/${id}/reject`),
+  rejectPost: (id, reason) => api.put(`/admin/posts/${id}/reject`, { reason }),
   getReports: (params) => api.get('/admin/reports', { params }),
   resolveReport: (id) => api.put(`/admin/reports/${id}/resolve`),
-  verifyTutor: (id) => api.put(`/admin/tutors/${id}/verify`),
+  verifyTutor: (id, note) => api.put(`/admin/tutors/${id}/verify`, { verificationNote: note || '' }),
+  rejectTutor: (id, note) => api.put(`/admin/tutors/${id}/reject`, { verificationNote: note || '' }),
 };
 
 export default api;

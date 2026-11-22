@@ -1,11 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import Navbar from '../components/common/Navbar';
 import Footer from '../components/common/Footer';
 import { useAuth } from '../context/AuthContext';
-import { tutorAPI, messageAPI } from '../api';
+import { tutorAPI, reviewAPI, reportAPI, messageAPI } from '../api';
+import { useApi } from '../hooks/useApi';
+import { notifySuccess, notifyError } from '../utils/toast';
 import { colorFor, initialsFor, getErrorMessage } from '../utils/helpers';
-import { Button, Card, Badge, Spinner, Alert, Textarea } from '../components/ui';
+import { Button, Card, Badge, Spinner, Alert, Textarea, Select, Modal } from '../components/ui';
+
+// useApi keeps the raw axios response; response.data is the API envelope.
+const unwrap = (source) => source?.data ?? source;
+const toArray = (value) => (Array.isArray(value) ? value : Array.isArray(value?.data) ? value.data : []);
+const listFrom = (source) => toArray(unwrap(source)?.data ?? unwrap(source));
 
 function Stars({ n = 5 }) {
   return (
@@ -27,27 +34,27 @@ export default function TutorProfilePage() {
   const [sendError, setSendError] = useState('');
   const [sending, setSending] = useState(false);
 
-  const [profile, setProfile] = useState(null);
-  const [reviews, setReviews] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const res = await tutorAPI.getById(id);
-        setProfile(res.data.profile);
-        setReviews(res.data.reviews || []);
-      } catch (err) {
-        setError(getErrorMessage(err, 'Could not load this tutor profile.'));
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, [id]);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportType, setReportType] = useState('user');
+  const [reportReason, setReportReason] = useState('');
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+
+  const profileApi = useApi(() => tutorAPI.getById(id), [id]);
+  const reviewsApi = useApi(() => reviewAPI.getForTutor(id), [id]);
+
+  const profileBody = unwrap(profileApi.data);
+  const rawProfile = profileBody?.profile ?? profileBody;
+  const profile = rawProfile?._id ? rawProfile : null;
+
+  let reviews = listFrom(reviewsApi.data);
+  if (reviews.length === 0) reviews = toArray(profileBody?.reviews);
+
+  const reloadAll = () => { profileApi.reload(); reviewsApi.reload(); };
 
   const handleSendMessage = async () => {
     if (!msgText.trim() || !profile) return;
@@ -58,13 +65,48 @@ export default function TutorProfilePage() {
       setMsgSent(true);
       setTimeout(() => { setMsgSent(false); setMsgText(''); setShowContact(false); }, 2000);
     } catch (err) {
-      setSendError(getErrorMessage(err, 'Could not send message.'));
+      const msg = getErrorMessage(err, 'Could not send message.');
+      setSendError(msg);
+      notifyError(msg);
     } finally {
       setSending(false);
     }
   };
 
-  if (loading) {
+  const handleSubmitReview = async () => {
+    if (!profile?.user?._id) return;
+    setReviewSubmitting(true);
+    try {
+      await reviewAPI.add(profile.user._id, { rating: Number(reviewRating), comment: reviewComment.trim() });
+      notifySuccess('Your review has been submitted. Thank you!');
+      setReviewOpen(false);
+      setReviewComment('');
+      setReviewRating(5);
+      reloadAll();
+    } catch (err) {
+      notifyError(getErrorMessage(err, 'Could not submit your review.'));
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
+
+  const handleSubmitReport = async () => {
+    if (!profile?.user?._id || !reportReason.trim()) return;
+    setReportSubmitting(true);
+    try {
+      await reportAPI.create({ type: reportType, reason: reportReason.trim(), against: profile.user._id });
+      notifySuccess('Report submitted. Our team will review it.');
+      setReportOpen(false);
+      setReportReason('');
+      setReportType('user');
+    } catch (err) {
+      notifyError(getErrorMessage(err, 'Could not submit your report.'));
+    } finally {
+      setReportSubmitting(false);
+    }
+  };
+
+  if (profileApi.loading) {
     return (
       <>
         <Navbar />
@@ -77,7 +119,7 @@ export default function TutorProfilePage() {
     );
   }
 
-  if (error || !profile) {
+  if (profileApi.error || !profile) {
     return (
       <>
         <Navbar />
@@ -85,7 +127,9 @@ export default function TutorProfilePage() {
           <div className="text-center">
             <div className="text-5xl mb-4">😕</div>
             <h3 className="text-lg font-bold text-gray-800 font-sora mb-1.5">Tutor not found</h3>
-            <p className="text-sm text-gray-400 max-w-xs mb-4">{error || 'This tutor profile could not be loaded.'}</p>
+            <p className="text-sm text-gray-400 max-w-xs mb-4">
+              {typeof profileApi.error === 'string' ? profileApi.error : getErrorMessage(profileApi.error, 'This tutor profile could not be loaded.')}
+            </p>
             <Link to="/tutors" className="no-underline">
               <Button>Browse Tutors</Button>
             </Link>
@@ -99,6 +143,9 @@ export default function TutorProfilePage() {
   const name = profile.user?.name || 'Tutor';
   const color = colorFor(name);
   const initials = initialsFor(name);
+  const tutorUserId = profile.user?._id;
+  const isOwnProfile = !!(user && tutorUserId && String(user._id) === String(tutorUserId));
+  const canReview = user?.role === 'student' && !isOwnProfile;
   const ratingDist = [5, 4, 3, 2, 1].map((n) => {
     const count = reviews.filter((r) => r.rating === n).length;
     const pct = reviews.length ? Math.round((count / reviews.length) * 100) : 0;
@@ -251,13 +298,24 @@ export default function TutorProfilePage() {
                 <div className="text-[13px] text-gray-400 mb-5">Negotiable for long-term</div>
 
                 {user ? (
-                  user._id !== profile.user?._id && (
-                    <Button onClick={() => setShowContact(!showContact)} size="lg" className="w-full">💬 Send Message</Button>
+                  !isOwnProfile && (
+                    <Button onClick={() => setShowContact(!showContact)} size="lg" className="w-full mb-2">💬 Send Message</Button>
                   )
                 ) : (
                   <Link to="/login" className="no-underline block">
-                    <Button size="lg" className="w-full">🔐 Login to Contact</Button>
+                    <Button size="lg" className="w-full mb-2">🔐 Login to Contact</Button>
                   </Link>
+                )}
+
+                {canReview && (
+                  <Button onClick={() => setReviewOpen(true)} variant="secondary" size="lg" className="w-full mb-2">
+                    ⭐ Write a Review
+                  </Button>
+                )}
+                {user && !isOwnProfile && (
+                  <Button onClick={() => setReportOpen(true)} variant="outline" size="sm" className="w-full">
+                    🚩 Report
+                  </Button>
                 )}
 
                 {showContact && (
@@ -297,6 +355,74 @@ export default function TutorProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Review Modal — backend enforces eligibility (e.g. accepted tuition). */}
+      <Modal
+        open={reviewOpen}
+        onClose={() => setReviewOpen(false)}
+        title={`⭐ Review ${name}`}
+        footer={
+          <div className="flex gap-2.5">
+            <Button variant="outline" className="flex-1" onClick={() => setReviewOpen(false)}>Cancel</Button>
+            <Button className="flex-1" disabled={reviewSubmitting} onClick={handleSubmitReview}>
+              {reviewSubmitting ? 'Submitting...' : 'Submit Review'}
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-sm text-gray-500 mb-3">Your rating</p>
+        <div className="flex gap-2 mb-5">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <label key={n} className="cursor-pointer flex flex-col items-center gap-1">
+              <input
+                type="radio"
+                name="review-rating"
+                value={n}
+                checked={reviewRating === n}
+                onChange={() => setReviewRating(n)}
+                className="sr-only"
+              />
+              <span className={`text-3xl transition-transform ${n <= reviewRating ? 'text-amber-400' : 'text-gray-300'} ${reviewRating === n ? 'scale-110' : ''}`}>★</span>
+              <span className="text-[10px] text-gray-400">{n}</span>
+            </label>
+          ))}
+        </div>
+        <Textarea
+          label="Comment (optional)"
+          className="h-[110px]"
+          placeholder="Share your experience with this tutor..."
+          value={reviewComment}
+          onChange={(e) => setReviewComment(e.target.value)}
+        />
+      </Modal>
+
+      {/* Report Modal */}
+      <Modal
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        title="🚩 Report Tutor"
+        footer={
+          <div className="flex gap-2.5">
+            <Button variant="outline" className="flex-1" onClick={() => setReportOpen(false)}>Cancel</Button>
+            <Button variant="danger" className="flex-1" disabled={reportSubmitting || !reportReason.trim()} onClick={handleSubmitReport}>
+              {reportSubmitting ? 'Submitting...' : 'Submit Report'}
+            </Button>
+          </div>
+        }
+      >
+        <Select label="Report type" value={reportType} onChange={(e) => setReportType(e.target.value)}>
+          <option value="user">Inappropriate user behavior</option>
+          <option value="post">Misleading information</option>
+          <option value="other">Something else</option>
+        </Select>
+        <Textarea
+          label="Reason"
+          className="h-[110px]"
+          placeholder="Tell us what happened..."
+          value={reportReason}
+          onChange={(e) => setReportReason(e.target.value)}
+        />
+      </Modal>
       <Footer />
     </>
   );

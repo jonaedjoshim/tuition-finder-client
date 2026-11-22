@@ -4,14 +4,59 @@ import Navbar from '../components/common/Navbar';
 import Footer from '../components/common/Footer';
 import { useAuth } from '../context/AuthContext';
 import { postAPI } from '../api';
-import { TUTOR_GENDER_TO_BACKEND, MEDIUM_TO_BACKEND, getErrorMessage } from '../utils/helpers';
+import { notifyError } from '../utils/toast';
+import { SUBJECTS, LOCATIONS, CLASS_LEVELS, DAYS, MEDIUMS, TUTOR_GENDERS, mediumLabel, genderLabel } from '../utils/constants';
+import { MEDIUM_TO_BACKEND, TUTOR_GENDER_TO_BACKEND, getErrorMessage } from '../utils/helpers';
 import { Button, Card, Input, Select, Textarea, Alert, EmptyState } from '../components/ui';
 
-const subjects = ['Mathematics', 'Physics', 'Chemistry', 'Biology', 'English', 'Bangla', 'Coding', 'Economics', 'History', 'ICT', 'IELTS'];
-const classes = ['Class 1-5', 'Class 6-8', 'Class 9-10 (SSC)', 'Class 11-12 (HSC)', 'Undergraduate', 'Graduate', 'Admission Test'];
-const locations = ['Dhaka', 'Chittagong', 'Sylhet', 'Rajshahi', 'Khulna', 'Barisal', 'Rangpur', 'Mymensingh', 'Online'];
-const tutorGenders = ['No Preference', 'Male', 'Female'];
-const daysOptions = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+const asList = (v) => (Array.isArray(v) ? v : []);
+
+const subjects = asList(SUBJECTS);
+const classes = asList(CLASS_LEVELS);
+const locations = asList(LOCATIONS);
+const daysOptions = asList(DAYS);
+
+// Shared constants expose { label, value } options for mediums/genders.
+// Normalising here also tolerates plain string option lists.
+const normaliseOptions = (list, labelFn) => asList(list).map((o) => {
+  if (typeof o === 'string') return { label: (labelFn && labelFn(o)) || o, value: o };
+  return { label: o.label || (labelFn && labelFn(o.value)) || o.value, value: o.value };
+});
+
+const mediumOptions = normaliseOptions(
+  asList(MEDIUMS).length ? MEDIUMS : Object.keys(MEDIUM_TO_BACKEND),
+  mediumLabel
+);
+// Madrasa is always offered, even if a deployment's constant list is out of date.
+if (!mediumOptions.some((o) => o.value === 'Madrasa')) mediumOptions.push({ label: 'Madrasa', value: 'Madrasa' });
+
+const genderOptions = normaliseOptions(
+  asList(TUTOR_GENDERS).length ? TUTOR_GENDERS : Object.keys(TUTOR_GENDER_TO_BACKEND),
+  genderLabel
+);
+
+const labelMedium = (v) => mediumOptions.find((o) => o.value === v)?.label
+  || (typeof mediumLabel === 'function' ? mediumLabel(v) : v) || v;
+const labelGender = (v) => genderOptions.find((o) => o.value === v)?.label
+  || (typeof genderLabel === 'function' ? genderLabel(v) : v) || v;
+
+const toBackendMedium = (m) => {
+  if (MEDIUM_TO_BACKEND[m]) return MEDIUM_TO_BACKEND[m];
+  const value = String(m || '').toLowerCase();
+  if (value.includes('madrasa') || value.includes('madrasah')) return 'Madrasa';
+  if (value.includes('bangla')) return 'Bangla';
+  if (value.includes('version')) return 'English Version';
+  if (value.includes('english')) return 'English';
+  return m;
+};
+
+const toBackendGender = (g) => {
+  if (TUTOR_GENDER_TO_BACKEND[g]) return TUTOR_GENDER_TO_BACKEND[g];
+  const value = String(g || '').toLowerCase();
+  if (value.includes('female')) return 'female';
+  if (value.includes('male')) return 'male';
+  return 'any';
+};
 
 export default function PostTuitionPage() {
   const { user } = useAuth();
@@ -24,7 +69,8 @@ export default function PostTuitionPage() {
   const [form, setForm] = useState({
     subject: '', class: '', location: '', area: '',
     salary: '', daysPerWeek: '3', preferredDays: [],
-    tutorGender: 'No Preference', medium: 'Bangla Medium',
+    tutorGender: genderOptions[0]?.value || 'any',
+    medium: mediumOptions.find((m) => m.value === 'Bangla')?.value || mediumOptions[0]?.value || 'Bangla',
     description: '', studentGender: '', numberOfStudents: '1',
   });
 
@@ -51,14 +97,16 @@ export default function PostTuitionPage() {
         area: form.area,
         daysPerWeek: Number(form.daysPerWeek),
         preferredDays: form.preferredDays,
-        tutorGender: TUTOR_GENDER_TO_BACKEND[form.tutorGender] || 'any',
-        medium: MEDIUM_TO_BACKEND[form.medium] || 'Bangla',
+        tutorGender: toBackendGender(form.tutorGender),
+        medium: toBackendMedium(form.medium),
         description: form.description,
       };
       await postAPI.create(payload);
       setSuccess(true);
     } catch (err) {
-      setError(getErrorMessage(err, 'Could not create your post. Please try again.'));
+      const message = getErrorMessage(err, 'Could not create your post. Please try again.');
+      setError(message);
+      notifyError(message);
     } finally {
       setSubmitting(false);
     }
@@ -168,16 +216,16 @@ export default function PostTuitionPage() {
 
                   <div className="mb-4">
                     <label className="text-sm font-semibold text-gray-800 font-sora block mb-1.5">Medium of Instruction</label>
-                    <div className="flex gap-2">
-                      {['Bangla Medium', 'English Medium', 'English Version'].map((m) => (
+                    <div className="flex flex-wrap gap-2">
+                      {mediumOptions.map((m) => (
                         <button
-                          key={m}
-                          onClick={() => set('medium', m)}
-                          className={`flex-1 py-2.5 rounded-[10px] text-[13px] font-semibold border-[1.5px] transition-colors ${
-                            form.medium === m ? 'border-royal bg-royal-light text-royal' : 'border-gray-200 text-gray-500'
+                          key={m.value}
+                          onClick={() => set('medium', m.value)}
+                          className={`px-3.5 py-2.5 rounded-[10px] text-[13px] font-semibold border-[1.5px] transition-colors ${
+                            form.medium === m.value ? 'border-royal bg-royal-light text-royal' : 'border-gray-200 text-gray-500'
                           }`}
                         >
-                          {m}
+                          {m.label}
                         </button>
                       ))}
                     </div>
@@ -211,7 +259,7 @@ export default function PostTuitionPage() {
                             form.preferredDays.includes(d) ? 'border-royal bg-royal-light text-royal' : 'border-gray-200 text-gray-500'
                           }`}
                         >
-                          {d.slice(0, 3)}
+                          {String(d).slice(0, 3)}
                         </button>
                       ))}
                     </div>
@@ -219,16 +267,16 @@ export default function PostTuitionPage() {
 
                   <div className="mb-4">
                     <label className="text-sm font-semibold text-gray-800 font-sora block mb-1.5">Preferred Tutor Gender</label>
-                    <div className="flex gap-2">
-                      {tutorGenders.map((g) => (
+                    <div className="flex flex-wrap gap-2">
+                      {genderOptions.map((g) => (
                         <button
-                          key={g}
-                          onClick={() => set('tutorGender', g)}
+                          key={g.value}
+                          onClick={() => set('tutorGender', g.value)}
                           className={`flex-1 py-2.5 rounded-[10px] text-[13px] font-semibold border-[1.5px] transition-colors ${
-                            form.tutorGender === g ? 'border-royal bg-royal-light text-royal' : 'border-gray-200 text-gray-500'
+                            form.tutorGender === g.value ? 'border-royal bg-royal-light text-royal' : 'border-gray-200 text-gray-500'
                           }`}
                         >
-                          {g}
+                          {g.label}
                         </button>
                       ))}
                     </div>
@@ -265,7 +313,8 @@ export default function PostTuitionPage() {
                       <div>📍 {form.location}{form.area ? `, ${form.area}` : ''}</div>
                       <div>💰 ৳{form.salary || 0}/hr • {form.daysPerWeek} days/week</div>
                       <div>📅 {form.preferredDays.join(', ') || 'No days selected'}</div>
-                      <div>👤 Tutor preference: {form.tutorGender}</div>
+                      <div>🎓 Medium: {labelMedium(form.medium)}</div>
+                      <div>👤 Tutor preference: {labelGender(form.tutorGender)}</div>
                     </div>
                   </div>
 

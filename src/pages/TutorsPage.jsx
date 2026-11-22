@@ -1,14 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/common/Navbar';
 import Footer from '../components/common/Footer';
 import { tutorAPI } from '../api';
+import { useApi } from '../hooks/useApi';
+import { SUBJECTS, LOCATIONS, CLASS_LEVELS } from '../utils/constants';
 import { colorFor, initialsFor, getErrorMessage } from '../utils/helpers';
-import { Button, Card, Badge, Spinner, EmptyState, Alert, Input } from '../components/ui';
+import { Button, Card, Badge, Spinner, EmptyState, Alert } from '../components/ui';
 
-const LOCATIONS = ['All', 'Dhaka', 'Chittagong', 'Sylhet', 'Rajshahi', 'Khulna', 'Online'];
-const SUBJECTS = ['All', 'Mathematics', 'Physics', 'Chemistry', 'Biology', 'English', 'Bangla', 'Coding', 'Economics', 'History'];
-const CLASSES = ['All', 'Class 1-5', 'Class 6-8', 'SSC', 'HSC', 'Undergraduate'];
+const subjectOptions = Array.isArray(SUBJECTS) ? SUBJECTS : [];
+const locationOptions = Array.isArray(LOCATIONS) ? LOCATIONS : [];
+const classOptions = Array.isArray(CLASS_LEVELS) ? CLASS_LEVELS : [];
+
+// Keep a legacy/unknown URL value visible so the active chip always matches the query.
+const withExtra = (opts, value) => (value && value !== 'All' && !opts.includes(value) ? [value, ...opts] : opts);
 
 function Stars({ n = 5 }) {
   return (
@@ -22,75 +27,74 @@ function Stars({ n = 5 }) {
 
 export default function TutorsPage() {
   const [searchParams] = useSearchParams();
+  const searchQuery = searchParams.toString();
+
   const [filters, setFilters] = useState({
     location: searchParams.get('location') || 'All',
     subject: searchParams.get('subject') || 'All',
-    classLevel: 'All',
+    // `class` is accepted as a legacy alias for `classLevel`.
+    classLevel: searchParams.get('classLevel') || searchParams.get('class') || 'All',
     minFee: '',
     maxFee: '',
     onlineOnly: false,
     verifiedOnly: false,
-    search: '',
+    search: searchParams.get('search') || '',
     sort: 'rating',
   });
   const [showFilters, setShowFilters] = useState(false);
-
-  const [tutors, setTutors] = useState([]);
-  const [pagination, setPagination] = useState({ total: 0, page: 1, totalPages: 1 });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [page, setPage] = useState(1);
+
+  // Re-sync when the URL changes (e.g. clicking a category link while already on /tutors).
+  useEffect(() => {
+    const sp = new URLSearchParams(searchQuery);
+    setFilters((f) => ({
+      ...f,
+      location: sp.get('location') || 'All',
+      subject: sp.get('subject') || 'All',
+      classLevel: sp.get('classLevel') || sp.get('class') || 'All',
+      search: sp.get('search') || '',
+    }));
+    setPage(1);
+  }, [searchQuery]);
 
   const setF = (k, v) => { setFilters((f) => ({ ...f, [k]: v })); setPage(1); };
 
-  const fetchTutors = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const sortMap = { rating: 'rating', reviews: 'rating', fee_low: 'fee_asc', fee_high: 'fee_desc' };
-      const params = { page, limit: 10, sort: sortMap[filters.sort] || 'rating' };
-      if (filters.subject !== 'All') params.subject = filters.subject;
-      if (filters.location !== 'All') params.location = filters.location;
-      if (filters.classLevel !== 'All') params.classLevel = filters.classLevel;
-      if (filters.minFee) params.minFee = filters.minFee;
-      if (filters.maxFee) params.maxFee = filters.maxFee;
-      if (filters.onlineOnly) params.online = true;
-      if (filters.verifiedOnly) params.verified = true;
+  const tutorsApi = useApi(() => {
+    const sortMap = { rating: 'rating', reviews: 'rating', fee_low: 'fee_asc', fee_high: 'fee_desc' };
+    const params = { page, limit: 10, sort: sortMap[filters.sort] || 'rating' };
+    if (filters.subject !== 'All') params.subject = filters.subject;
+    if (filters.location !== 'All') params.location = filters.location;
+    if (filters.classLevel !== 'All') params.classLevel = filters.classLevel;
+    if (filters.minFee) params.minFee = filters.minFee;
+    if (filters.maxFee) params.maxFee = filters.maxFee;
+    if (filters.onlineOnly) params.online = true;
+    if (filters.verifiedOnly) params.verified = true;
+    // Server-side free-text search over tutor name / subjects.
+    if (filters.search.trim()) params.search = filters.search.trim();
+    return tutorAPI.getAll(params);
+  }, [page, filters]);
 
-      const res = await tutorAPI.getAll(params);
-      setTutors(res.data.data);
-      setPagination(res.data.pagination);
-    } catch (err) {
-      setError(getErrorMessage(err, 'Could not load tutors. Please try again.'));
-      setTutors([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [filters, page]);
-
-  useEffect(() => { fetchTutors(); }, [fetchTutors]);
-
-  // Client-side search-by-name (backend doesn't expose a free-text name search endpoint)
-  const visibleTutors = filters.search
-    ? tutors.filter((t) =>
-        t.user?.name?.toLowerCase().includes(filters.search.toLowerCase()) ||
-        t.subjects?.some((s) => s.toLowerCase().includes(filters.search.toLowerCase()))
-      )
-    : tutors;
+  // useApi keeps the raw axios response; response.data is the API envelope.
+  const body = tutorsApi.data?.data ?? tutorsApi.data;
+  const tutors = Array.isArray(body?.data) ? body.data : Array.isArray(body) ? body : [];
+  const pagination = body?.pagination || { total: 0, page: 1, totalPages: 1 };
+  const errorMessage = typeof tutorsApi.error === 'string'
+    ? tutorsApi.error
+    : getErrorMessage(tutorsApi.error, 'Could not load tutors. Please try again.');
 
   const FilterPanel = () => (
     <Card className="p-6 sticky top-24">
       <h3 className="text-base font-bold text-gray-900 font-sora mb-5">Filters</h3>
 
       {[
-        { label: 'Location', key: 'location', opts: LOCATIONS },
-        { label: 'Subject', key: 'subject', opts: SUBJECTS },
-        { label: 'Class Level', key: 'classLevel', opts: CLASSES },
+        { label: 'Location', key: 'location', opts: withExtra(locationOptions, filters.location) },
+        { label: 'Subject', key: 'subject', opts: withExtra(subjectOptions, filters.subject) },
+        { label: 'Class Level', key: 'classLevel', opts: withExtra(classOptions, filters.classLevel) },
       ].map(({ label, key, opts }) => (
         <div key={key} className="mb-5">
           <label className="text-xs font-bold text-gray-400 uppercase tracking-wide block mb-2">{label}</label>
           <div className="flex flex-wrap gap-1.5">
-            {opts.map((opt) => (
+            {['All', ...opts.filter((o) => o !== 'All')].map((opt) => (
               <button
                 key={opt}
                 onClick={() => setF(key, opt)}
@@ -142,7 +146,7 @@ export default function TutorsPage() {
         <div className="bg-gradient-to-br from-royal-dark to-royal py-12 pb-14">
           <div className="container max-w-[1200px] mx-auto px-6">
             <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-2.5">Find Your Perfect Tutor</h1>
-            <p className="text-base text-white/75 mb-7">{pagination.total}+ verified tutors across Bangladesh</p>
+            <p className="text-base text-white/75 mb-7">{pagination.total || 0}+ verified tutors across Bangladesh</p>
             <div className="flex gap-3 max-w-2xl flex-wrap">
               <div className="flex-1 min-w-[200px] flex items-center gap-2.5 bg-white/15 border-[1.5px] border-white/30 rounded-xl px-4 py-3">
                 <span className="text-lg">🔍</span>
@@ -179,7 +183,7 @@ export default function TutorsPage() {
             <div>
               <div className="flex items-center justify-between mb-6">
                 <p className="text-[15px] text-gray-500">
-                  <span className="font-bold text-gray-900">{pagination.total}</span> tutors found
+                  <span className="font-bold text-gray-900">{pagination.total || 0}</span> tutors found
                 </p>
                 <Button onClick={() => setShowFilters(!showFilters)} variant="outline" size="sm" className="md:hidden">
                   🔧 Filters
@@ -188,16 +192,16 @@ export default function TutorsPage() {
 
               {showFilters && <div className="md:hidden mb-6"><FilterPanel /></div>}
 
-              {loading ? (
+              {tutorsApi.loading ? (
                 <div className="flex flex-col items-center py-16 gap-3"><Spinner size="lg" /><p className="text-gray-400">Loading tutors...</p></div>
-              ) : error ? (
-                <Alert variant="error">⚠️ {error}</Alert>
-              ) : visibleTutors.length === 0 ? (
+              ) : tutorsApi.error ? (
+                <Alert variant="error">⚠️ {errorMessage}</Alert>
+              ) : tutors.length === 0 ? (
                 <EmptyState icon="🔍" title="No tutors found" desc="Try adjusting your filters or search query." />
               ) : (
                 <>
                   <div className="flex flex-col gap-4">
-                    {visibleTutors.map((t) => {
+                    {tutors.map((t) => {
                       const name = t.user?.name || 'Tutor';
                       const color = colorFor(name);
                       const initials = initialsFor(name);
@@ -256,7 +260,7 @@ export default function TutorsPage() {
                   {pagination.totalPages > 1 && (
                     <div className="flex justify-center gap-2 mt-8">
                       <Button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} variant="outline" size="sm">← Prev</Button>
-                      <span className="flex items-center text-sm text-gray-500 px-2.5">Page {pagination.page} of {pagination.totalPages}</span>
+                      <span className="flex items-center text-sm text-gray-500 px-2.5">Page {pagination.page || page} of {pagination.totalPages}</span>
                       <Button disabled={page >= pagination.totalPages} onClick={() => setPage((p) => p + 1)} variant="outline" size="sm">Next →</Button>
                     </div>
                   )}

@@ -1,14 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Navbar from '../components/common/Navbar';
 import Footer from '../components/common/Footer';
 import { tutorAPI } from '../api';
+import { useApi } from '../hooks/useApi';
+import { SUBJECTS, LOCATIONS, CLASS_LEVELS } from '../utils/constants';
 import { colorFor, initialsFor } from '../utils/helpers';
 import { Button, Card, Badge, Spinner, EmptyState } from '../components/ui';
-
-const subjects = ['Mathematics', 'Physics', 'Chemistry', 'Biology', 'English', 'Bangla', 'Coding', 'Economics', 'History', 'IELTS'];
-const locations = ['Dhaka', 'Chittagong', 'Sylhet', 'Rajshahi', 'Khulna', 'Barisal', 'Rangpur', 'Online'];
-const classes = ['Class 1-5', 'Class 6-8', 'Class 9-10 (SSC)', 'Class 11-12 (HSC)', 'Undergraduate', 'Graduate'];
 
 // Static category browser. Per-category tutor counts aren't exposed by the backend,
 // so we show subjects to browse by without fabricating numbers.
@@ -46,33 +44,19 @@ export default function HomePage() {
   const [cls, setCls] = useState('');
   const navigate = useNavigate();
 
-  const [featuredTutors, setFeaturedTutors] = useState([]);
-  const [tutorsLoading, setTutorsLoading] = useState(true);
-  const [totalTutors, setTotalTutors] = useState(null);
+  const featured = useApi(() => tutorAPI.getAll({ sort: 'rating', limit: 6 }), []);
+  // useApi stores the raw axios response: response.data is the API envelope.
+  const body = featured.data?.data ?? featured.data;
+  const featuredTutors = Array.isArray(body?.data) ? body.data : Array.isArray(body) ? body : [];
+  const totalTutors = body?.pagination?.total ?? null;
 
   const handleSearch = () => {
     const params = new URLSearchParams();
     if (sub) params.set('subject', sub);
     if (loc) params.set('location', loc);
-    if (cls) params.set('class', cls);
+    if (cls) params.set('classLevel', cls);
     navigate(`/tutors?${params.toString()}`);
   };
-
-  useEffect(() => {
-    const loadFeatured = async () => {
-      setTutorsLoading(true);
-      try {
-        const res = await tutorAPI.getAll({ sort: 'rating', limit: 6 });
-        setFeaturedTutors(res.data.data);
-        setTotalTutors(res.data.pagination.total);
-      } catch (err) {
-        setFeaturedTutors([]);
-      } finally {
-        setTutorsLoading(false);
-      }
-    };
-    loadFeatured();
-  }, []);
 
   return (
     <>
@@ -98,15 +82,15 @@ export default function HomePage() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <select value={sub} onChange={(e) => setSub(e.target.value)} className="px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-royal">
                   <option value="">Any Subject</option>
-                  {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
+                  {(SUBJECTS || []).map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
                 <select value={loc} onChange={(e) => setLoc(e.target.value)} className="px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-royal">
                   <option value="">Any Location</option>
-                  {locations.map((l) => <option key={l} value={l}>{l}</option>)}
+                  {(LOCATIONS || []).map((l) => <option key={l} value={l}>{l}</option>)}
                 </select>
                 <select value={cls} onChange={(e) => setCls(e.target.value)} className="px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-royal">
                   <option value="">Any Class</option>
-                  {classes.map((c) => <option key={c} value={c}>{c}</option>)}
+                  {(CLASS_LEVELS || []).map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <Button onClick={handleSearch} size="lg" className="w-full mt-3">🔍 Search Tutors</Button>
@@ -178,7 +162,7 @@ export default function HomePage() {
             </Link>
           </div>
 
-          {tutorsLoading ? (
+          {featured.loading ? (
             <div className="flex flex-col items-center py-16 gap-3"><Spinner size="lg" /><p className="text-gray-400">Loading tutors...</p></div>
           ) : featuredTutors.length === 0 ? (
             <EmptyState icon="🌟" title="No tutors yet" desc="Be the first to join as a tutor!" />

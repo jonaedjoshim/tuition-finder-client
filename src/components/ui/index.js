@@ -5,3 +5,6 @@ export { Input, Textarea, Select } from './Input';
 export { Spinner } from './Spinner';
 export { EmptyState } from './EmptyState';
 export { Alert } from './Alert';
+export { Modal } from './Modal';
+export { ConfirmDialog } from './ConfirmDialog';
+export { Skeleton } from './Skeleton';
